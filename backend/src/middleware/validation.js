@@ -83,16 +83,22 @@ const validateFamilyCreation = (req, res, next) => {
 
 // Validate profile creation data
 const validateProfileCreation = (req, res, next) => {
-  const { name, type, description, config } = req.body;
+  const { name, type, familyId, description, config } = req.body;
   const errors = [];
   
   // Check required fields
   if (!name) errors.push('Profile name is required');
   if (!type) errors.push('Profile type is required');
+  if (!familyId) errors.push('Family ID is required');
   
   // Check type
   if (type && !['essential_kids', 'student_mode', 'balanced_teen', 'custom'].includes(type)) {
     errors.push('Profile type must be either "essential_kids", "student_mode", "balanced_teen", or "custom"');
+  }
+  
+  // Check familyId is a number
+  if (familyId && isNaN(familyId)) {
+    errors.push('Family ID must be a number');
   }
   
   // Check config for custom profiles

@@ -28,10 +28,12 @@ class SimpleMDMService {
       const errorData = {
         status: error.response.status,
         statusText: error.response.statusText,
-        data: error.response.data
+        data: error.response.data,
+        url: error.config?.url,
+        method: error.config?.method
       };
       
-      console.error('SimpleMDM API Error:', errorData);
+      console.error('SimpleMDM API Error Details:', JSON.stringify(errorData, null, 2));
       
       const err = new Error(`SimpleMDM API Error: ${error.response.status} ${error.response.statusText}`);
       err.status = error.response.status;
@@ -57,10 +59,19 @@ class SimpleMDMService {
   // Create a device group (family)
   async createDeviceGroup(name) {
     try {
-      const response = await this.client.post('/device_groups', {
+      console.log('Creating device group:', name);
+      
+      // First, let's test basic API connectivity
+      const testResponse = await this.client.get('/account');
+      console.log('Account info:', testResponse.data);
+      
+      // Create the device group - note: this might not be directly supported in the API
+      // Let's try assignment groups instead, which can group devices
+      const response = await this.client.post('/assignment_groups', {
         name: name,
-        auto_deploy_enabled: true
+        auto_deploy: true
       });
+      console.log('Created assignment group:', response.data);
       return response.data.data;
     } catch (error) {
       this.handleApiError(error);
@@ -104,10 +115,17 @@ class SimpleMDMService {
   // Generate enrollment URL for a device group
   async generateEnrollmentUrl(deviceGroupId) {
     try {
-      const response = await this.client.post('/enrollments', {
-        device_group_id: deviceGroupId
+      // Create a one-time enrollment that can be used by children
+      const response = await this.client.post('/devices', {
+        name: `Nook Device - ${Date.now()}`,
+        group_id: deviceGroupId
       });
-      return response.data.data;
+      
+      // The response contains an enrollment_url for device setup
+      return {
+        id: response.data.data.id,
+        url: response.data.data.attributes.enrollment_url
+      };
     } catch (error) {
       this.handleApiError(error);
     }
@@ -214,10 +232,25 @@ class SimpleMDMService {
   // Create a profile
   async createProfile(name, mobileconfig) {
     try {
-      const response = await this.client.post('/profiles', {
-        name: name,
-        mobileconfig: mobileconfig
+      // Create FormData for multipart upload
+      const FormData = require('form-data');
+      const form = new FormData();
+      
+      form.append('name', name);
+      form.append('mobileconfig', mobileconfig, {
+        filename: `${name}.mobileconfig`,
+        contentType: 'application/x-apple-aspen-config'
       });
+      form.append('user_scope', 'true');
+      form.append('attribute_support', 'false');
+      
+      const response = await this.client.post('/custom_configuration_profiles', form, {
+        headers: {
+          ...form.getHeaders(),
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
       return response.data.data;
     } catch (error) {
       this.handleApiError(error);
@@ -227,7 +260,7 @@ class SimpleMDMService {
   // Get a profile by ID
   async getProfile(id) {
     try {
-      const response = await this.client.get(`/profiles/${id}`);
+      const response = await this.client.get(`/custom_configuration_profiles/${id}`);
       return response.data.data;
     } catch (error) {
       this.handleApiError(error);
@@ -237,9 +270,11 @@ class SimpleMDMService {
   // Update a profile
   async updateProfile(id, name, mobileconfig) {
     try {
-      const response = await this.client.patch(`/profiles/${id}`, {
+      const response = await this.client.patch(`/custom_configuration_profiles/${id}`, {
         name: name,
-        mobileconfig: mobileconfig
+        mobileconfig: mobileconfig,
+        user_scope: true,
+        attribute_support: false
       });
       return response.data.data;
     } catch (error) {
@@ -250,7 +285,7 @@ class SimpleMDMService {
   // Delete a profile
   async deleteProfile(id) {
     try {
-      await this.client.delete(`/profiles/${id}`);
+      await this.client.delete(`/custom_configuration_profiles/${id}`);
       return true;
     } catch (error) {
       this.handleApiError(error);
@@ -260,10 +295,8 @@ class SimpleMDMService {
   // Assign a profile to a device group
   async assignProfileToGroup(profileId, deviceGroupId) {
     try {
-      const response = await this.client.post(`/profiles/${profileId}/relationships/device_groups`, {
-        device_group_id: deviceGroupId
-      });
-      return response.data.data;
+      const response = await this.client.post(`/custom_configuration_profiles/${profileId}/device_groups/${deviceGroupId}`);
+      return response.data;
     } catch (error) {
       this.handleApiError(error);
     }
@@ -272,7 +305,7 @@ class SimpleMDMService {
   // Remove a profile from a device group
   async removeProfileFromGroup(profileId, deviceGroupId) {
     try {
-      await this.client.delete(`/profiles/${profileId}/relationships/device_groups/${deviceGroupId}`);
+      await this.client.delete(`/custom_configuration_profiles/${profileId}/device_groups/${deviceGroupId}`);
       return true;
     } catch (error) {
       this.handleApiError(error);
@@ -282,10 +315,8 @@ class SimpleMDMService {
   // Assign a profile to a device
   async assignProfileToDevice(profileId, deviceId) {
     try {
-      const response = await this.client.post(`/profiles/${profileId}/relationships/devices`, {
-        device_id: deviceId
-      });
-      return response.data.data;
+      const response = await this.client.post(`/custom_configuration_profiles/${profileId}/devices/${deviceId}`);
+      return response.data;
     } catch (error) {
       this.handleApiError(error);
     }
@@ -294,7 +325,7 @@ class SimpleMDMService {
   // Remove a profile from a device
   async removeProfileFromDevice(profileId, deviceId) {
     try {
-      await this.client.delete(`/profiles/${profileId}/relationships/devices/${deviceId}`);
+      await this.client.delete(`/custom_configuration_profiles/${profileId}/devices/${deviceId}`);
       return true;
     } catch (error) {
       this.handleApiError(error);
