@@ -8,11 +8,12 @@ class MasterProfile {
        FROM master_profiles
        ORDER BY 
          CASE type 
-           WHEN 'essential_kids' THEN 1
-           WHEN 'student_mode' THEN 2
-           WHEN 'balanced_teen' THEN 3
-           WHEN 'custom_template' THEN 4
-           ELSE 5
+           WHEN 'first_phone' THEN 1
+           WHEN 'explorer' THEN 2
+           WHEN 'guardian' THEN 3
+           WHEN 'time_out' THEN 4
+           WHEN 'custom' THEN 5
+           ELSE 6
          END`
     );
     
@@ -138,26 +139,31 @@ class MasterProfile {
     }));
   }
 
-  // Get metadata for profile types
+  // Get metadata for profile types - UPDATED FOR NEW PROFILE TYPES
   static _getTypeMetadata(type) {
     const metadata = {
-      essential_kids: {
-        ageRange: 'Ages 6-10',
-        apps: ['Phone', 'Messages', 'Photos', 'Mail'],
-        restrictions: 'No internet, No app installation, Emergency only'
+      first_phone: {
+        target: 'Young kids getting their first phone',
+        apps: ['Phone', 'Messages'],
+        restrictions: 'No internet, no camera, no app store, regular calls allowed'
       },
-      student_mode: {
-        ageRange: 'Ages 10-14', 
-        apps: ['Phone', 'Messages', 'Photos', 'Mail', 'Safari*', 'Calendar', 'Camera', 'Notes'],
-        restrictions: 'Educational sites only, Time limits, No social media'
+      explorer: {
+        target: 'Kids ready for more features but still supervised',
+        apps: ['Phone', 'Messages', 'Camera', 'YouTube Kids', 'Maps', 'Clock'],
+        restrictions: 'No social media, no app installation, filtered YouTube'
       },
-      balanced_teen: {
-        ageRange: 'Ages 12-16',
-        apps: ['Phone', 'Messages', 'Camera', 'Music', 'Safari*', 'Calendar', 'App Store*'],
-        restrictions: 'Content filtering, Evening limits, Parent approval for new apps'
+      guardian: {
+        target: 'Teens who can handle most apps but need social media protection',
+        apps: ['All default apps + App Store (filtered)'],
+        restrictions: 'Blocks TikTok, Instagram, Snapchat, Facebook, Twitter, Discord, dating apps'
       },
-      custom_template: {
-        ageRange: 'Any age',
+      time_out: {
+        target: 'Any age - for when rules are broken',
+        apps: ['Phone only'],
+        restrictions: 'Fully locked, no bypass possible, can be instantly applied/removed'
+      },
+      custom: {
+        target: 'Any age',
         apps: ['Customizable'],
         restrictions: 'Fully customizable by parent'
       }

@@ -1,75 +1,101 @@
+const fs = require('fs');
+const path = require('path');
+
 // Profile XML generators for iOS configuration profiles
 
 class ProfileGenerators {
   // Profile metadata - descriptions, allowed apps, etc.
   static getProfileMetadata() {
     return {
-      essential_kids: {
-        name: 'Essential Kids',
-        description: 'Basic profile for young children with only essential apps - Phone, Messages, Photos, Mail',
-        ageRange: 'Ages 6-10',
+      first_phone: {
+        name: 'First Phone',
+        description: 'Basic phone for young kids getting their first phone - Phone and Messages only',
+        target: 'Young kids getting their first phone',
         allowedApps: [
           'com.apple.mobilephone',    // Phone
-          'com.apple.MobileSMS',      // Messages  
-          'com.apple.mobileslideshow', // Photos
-          'com.apple.mobilemail'      // Mail
+          'com.apple.MobileSMS'       // Messages
+        ],
+        restrictions: {
+          allow_camera: false,
+          allow_safari: false,
+          allow_app_installation: false,
+          allow_in_app_purchases: false,
+          allow_explicit_content: false,
+          allow_app_store: false,
+          emergency_calls_only: false // They can make regular calls, not just emergency
+        }
+      },
+      explorer: {
+        name: 'Explorer',
+        description: 'Enhanced features for kids ready for more but still supervised - Camera, YouTube Kids, Maps included',
+        target: 'Kids ready for more features but still supervised',
+        allowedApps: [
+          'com.apple.mobilephone',    // Phone
+          'com.apple.MobileSMS',      // Messages
+          'com.apple.camera',         // Camera
+          'com.google.ios.youtubekids', // YouTube Kids
+          'com.apple.Maps',           // Maps
+          'com.apple.mobiletimer'     // Clock
         ],
         restrictions: {
           allow_camera: true,
           allow_safari: false,
           allow_app_installation: false,
           allow_in_app_purchases: false,
-          allow_explicit_content: false
+          allow_explicit_content: false,
+          allow_social_media: false,
+          filtered_youtube: true
         }
       },
-      student_mode: {
-        name: 'Student Mode',
-        description: 'Educational profile with filtered internet access and school-appropriate apps',
-        ageRange: 'Ages 10-14',
-        allowedApps: [
-          'com.apple.mobilephone',    // Phone
-          'com.apple.MobileSMS',      // Messages
-          'com.apple.mobileslideshow', // Photos
-          'com.apple.mobilemail',     // Mail
-          'com.apple.mobilesafari',   // Safari (filtered)
-          'com.apple.mobilecal',      // Calendar
-          'com.apple.camera',         // Camera
-          'com.apple.mobilenotes'     // Notes
-        ],
-        restrictions: {
-          allow_camera: true,
-          allow_safari: true,
-          allow_app_installation: false,
-          allow_in_app_purchases: false,
-          allow_explicit_content: false
-        }
-      },
-      balanced_teen: {
-        name: 'Balanced Teen',
-        description: 'More freedom with smart restrictions - suitable for responsible teenagers',
-        ageRange: 'Ages 12-16',
-        allowedApps: [
-          'com.apple.mobilephone',    // Phone
-          'com.apple.MobileSMS',      // Messages
-          'com.apple.mobileslideshow', // Photos
-          'com.apple.mobilemail',     // Mail
-          'com.apple.mobilesafari',   // Safari
-          'com.apple.mobilecal',      // Calendar
-          'com.apple.camera',         // Camera
-          'com.apple.mobilenotes',    // Notes
-          'com.apple.Music',          // Music
-          'com.apple.AppStore'        // App Store (limited)
+      guardian: {
+        name: 'Guardian',
+        description: 'Full access with social media protection - All apps except dangerous social platforms',
+        target: 'Teens who can handle most apps but need social media protection',
+        allowedApps: 'all_except_blacklisted',
+        blockedApps: [
+          'com.zhiliaoapp.musically',   // TikTok
+          'com.burbn.instagram',        // Instagram
+          'com.toyopagroup.picaboo',    // Snapchat
+          'com.facebook.Facebook',      // Facebook
+          'com.atebits.Tweetie2',       // Twitter
+          'com.hammerandchisel.discord', // Discord
+          'com.bumble.app',             // Bumble
+          'com.cardify.tinder',         // Tinder
+          'com.pof.pof',                // Plenty of Fish
+          'com.match.match',            // Match
+          'com.badoo.badoo',            // Badoo
+          'com.hinge.hinge'             // Hinge
         ],
         restrictions: {
           allow_camera: true,
           allow_safari: true,
           allow_app_installation: true,
           allow_in_app_purchases: false,
-          allow_explicit_content: false
+          allow_explicit_content: false,
+          app_store_filtered: true,
+          blacklist_enforcement: true
+        }
+      },
+      time_out: {
+        name: 'Time Out',
+        description: 'Disciplinary mode - Phone only when rules are broken',
+        target: 'Any age - for when rules are broken',
+        allowedApps: [
+          'com.apple.mobilephone'     // Phone only
+        ],
+        restrictions: {
+          allow_camera: false,
+          allow_safari: false,
+          allow_app_installation: false,
+          allow_in_app_purchases: false,
+          allow_explicit_content: false,
+          fully_locked: true,
+          no_bypass_possible: true
         }
       }
     };
   }
+
   // Generate a UUID for profile payloads
   static generateUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -79,772 +105,71 @@ class ProfileGenerators {
     });
   }
 
-  // First Phone Profile - Calls and texts only
-  static generateFirstPhoneProfile(familyName) {
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>PayloadContent</key>
-  <array>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures restrictions for first phone</string>
-      <key>PayloadDisplayName</key>
-      <string>First Phone Restrictions</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.firstphone.restrictions</string>
-      <key>PayloadType</key>
-      <string>com.apple.applicationaccess</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>allowAppInstallation</key>
-      <false/>
-      <key>allowCamera</key>
-      <false/>
-      <key>allowExplicitContent</key>
-      <false/>
-      <key>allowInAppPurchases</key>
-      <false/>
-      <key>allowSafari</key>
-      <false/>
-      <key>allowAccountModification</key>
-      <false/>
-      <key>allowFindMyFriendsModification</key>
-      <false/>
-      <key>allowEnterpriseAppTrust</key>
-      <false/>
-      <key>forceEncryptedBackup</key>
-      <true/>
-      <key>allowPasswordAutoFill</key>
-      <false/>
-      <key>allowPasswordSharing</key>
-      <false/>
-      <key>allowPasswordProximityRequests</key>
-      <false/>
-      <key>allowAirDrop</key>
-      <false/>
-      <key>allowAppRemoval</key>
-      <false/>
-      <key>allowAssistant</key>
-      <false/>
-      <key>allowBookstore</key>
-      <false/>
-      <key>allowCloudDocumentSync</key>
-      <false/>
-      <key>allowMusicService</key>
-      <false/>
-      <key>allowScreenshot</key>
-      <false/>
-      <key>allowSharedStream</key>
-      <false/>
-      <key>allowiTunes</key>
-      <false/>
-      <key>allowUIConfigurationProfileInstallation</key>
-      <false/>
-      <key>allowSettingsModification</key>
-      <false/>
-      <key>allowControlCenter</key>
-      <false/>
-      <key>allowNotificationCenter</key>
-      <false/>
-      <key>forceLimitAdTracking</key>
-      <true/>
-    </dict>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures allowed apps for first phone</string>
-      <key>PayloadDisplayName</key>
-      <string>First Phone Apps</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.firstphone.apps</string>
-      <key>PayloadType</key>
-      <string>com.apple.functionality.whitelisted-applications</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>WhitelistedApplications</key>
-      <array>
-        <string>com.apple.mobilephone</string>
-        <string>com.apple.MobileSMS</string>
-      </array>
-    </dict>
-  </array>
-  <key>PayloadDescription</key>
-  <string>First Phone profile - calls and texts only for young children</string>
-  <key>PayloadDisplayName</key>
-  <string>${familyName} - First Phone</string>
-  <key>PayloadIdentifier</key>
-  <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.firstphone</string>
-  <key>PayloadOrganization</key>
-  <string>Nook MDM</string>
-  <key>PayloadRemovalDisallowed</key>
-  <true/>
-  <key>PayloadType</key>
-  <string>Configuration</string>
-  <key>PayloadUUID</key>
-  <string>${this.generateUUID()}</string>
-  <key>PayloadVersion</key>
-  <integer>1</integer>
-</dict>
-</plist>`;
+  // Helper method to read XML template file
+  static readTemplate(templateName) {
+    const templatePath = path.join(__dirname, 'profiles', `${templateName}.xml`);
+    
+    if (!fs.existsSync(templatePath)) {
+      throw new Error(`Template file not found: ${templatePath}`);
+    }
+    
+    return fs.readFileSync(templatePath, 'utf8');
   }
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>PayloadContent</key>
-  <array>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures restrictions</string>
-      <key>PayloadDisplayName</key>
-      <string>Restrictions</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.restrictions</string>
-      <key>PayloadType</key>
-      <string>com.apple.applicationaccess</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>allowAppInstallation</key>
-      <false/>
-      <key>allowCamera</key>
-      <true/>
-      <key>allowExplicitContent</key>
-      <false/>
-      <key>allowInAppPurchases</key>
-      <false/>
-      <key>allowSafari</key>
-      <false/>
-      <key>allowAccountModification</key>
-      <false/>
-      <key>allowFindMyFriendsModification</key>
-      <false/>
-      <key>allowEnterpriseAppTrust</key>
-      <false/>
-      <key>forceEncryptedBackup</key>
-      <true/>
-      <key>allowPasswordAutoFill</key>
-      <false/>
-      <key>allowPasswordSharing</key>
-      <false/>
-      <key>allowPasswordProximityRequests</key>
-      <false/>
-      <key>allowAirDrop</key>
-      <false/>
-      <key>allowAppRemoval</key>
-      <false/>
-      <key>allowAssistant</key>
-      <false/>
-      <key>allowBookstore</key>
-      <false/>
-      <key>allowCloudDocumentSync</key>
-      <false/>
-      <key>allowMusicService</key>
-      <false/>
-      <key>allowScreenshot</key>
-      <false/>
-      <key>allowSharedStream</key>
-      <false/>
-      <key>allowiTunes</key>
-      <false/>
-      <key>forceAssistantProfanityFilter</key>
-      <true/>
-      <key>forceLimitAdTracking</key>
-      <true/>
-    </dict>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures allowed apps</string>
-      <key>PayloadDisplayName</key>
-      <string>Allowed Apps</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.allowedapps</string>
-      <key>PayloadType</key>
-      <string>com.apple.functionality.whitelisted-applications</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>WhitelistedApplications</key>
-      <array>
-        <string>com.apple.mobilephone</string>
-        <string>com.apple.MobileSMS</string>
-        <string>com.apple.mobileslideshow</string>
-        <string>com.apple.mobilemail</string>
-      </array>
-    </dict>
-  </array>
-  <key>PayloadDescription</key>
-  <string>Essential Kids profile with limited apps for young children</string>
-  <key>PayloadDisplayName</key>
-  <string>${familyName} - Essential Kids</string>
-  <key>PayloadIdentifier</key>
-  <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.essentialkids</string>
-  <key>PayloadOrganization</key>
-  <string>Nook MDM</string>
-  <key>PayloadRemovalDisallowed</key>
-  <true/>
-  <key>PayloadType</key>
-  <string>Configuration</string>
-  <key>PayloadUUID</key>
-  <string>${this.generateUUID()}</string>
-  <key>PayloadVersion</key>
-  <integer>1</integer>
-</dict>
-</plist>`;
+
+  // Helper method to replace placeholders in template
+  static processTemplate(template, familyName, replacements = {}) {
+    const familySlug = familyName.toLowerCase().replace(/\s/g, '-');
+    
+    // Default replacements
+    const defaultReplacements = {
+      '{{FAMILY_NAME}}': familyName,
+      '{{FAMILY_SLUG}}': familySlug,
+      '{{UUID_MAIN}}': this.generateUUID(),
+      '{{UUID_1}}': this.generateUUID(),
+      '{{UUID_2}}': this.generateUUID(),
+      '{{UUID_3}}': this.generateUUID()
+    };
+    
+    // Merge with custom replacements
+    const allReplacements = { ...defaultReplacements, ...replacements };
+    
+    // Replace all placeholders
+    let processedTemplate = template;
+    for (const [placeholder, value] of Object.entries(allReplacements)) {
+      processedTemplate = processedTemplate.replace(new RegExp(placeholder, 'g'), value);
+    }
+    
+    return processedTemplate;
+  }
+
+  // First Phone Profile - Phone and Messages only
+  static generateFirstPhoneProfile(familyName) {
+    const template = this.readTemplate('first-phone');
+    return this.processTemplate(template, familyName);
   }
 
   // Explorer Profile - Enhanced features for supervised kids
   static generateExplorerProfile(familyName) {
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>PayloadContent</key>
-  <array>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures restrictions for explorer mode</string>
-      <key>PayloadDisplayName</key>
-      <string>Explorer Restrictions</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.explorer.restrictions</string>
-      <key>PayloadType</key>
-      <string>com.apple.applicationaccess</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>allowAppInstallation</key>
-      <false/>
-      <key>allowCamera</key>
-      <true/>
-      <key>allowExplicitContent</key>
-      <false/>
-      <key>allowInAppPurchases</key>
-      <false/>
-      <key>allowSafari</key>
-      <false/>
-      <key>allowAccountModification</key>
-      <false/>
-      <key>allowFindMyFriendsModification</key>
-      <false/>
-      <key>allowEnterpriseAppTrust</key>
-      <false/>
-      <key>forceEncryptedBackup</key>
-      <true/>
-      <key>allowPasswordAutoFill</key>
-      <false/>
-      <key>allowPasswordSharing</key>
-      <false/>
-      <key>allowPasswordProximityRequests</key>
-      <false/>
-      <key>allowAirDrop</key>
-      <false/>
-      <key>allowAppRemoval</key>
-      <false/>
-      <key>allowAssistant</key>
-      <true/>
-      <key>allowBookstore</key>
-      <false/>
-      <key>allowCloudDocumentSync</key>
-      <false/>
-      <key>allowMusicService</key>
-      <false/>
-      <key>allowScreenshot</key>
-      <true/>
-      <key>allowSharedStream</key>
-      <false/>
-      <key>allowiTunes</key>
-      <false/>
-      <key>allowUIConfigurationProfileInstallation</key>
-      <false/>
-      <key>allowSettingsModification</key>
-      <false/>
-      <key>forceLimitAdTracking</key>
-      <true/>
-    </dict>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures allowed apps for explorer mode</string>
-      <key>PayloadDisplayName</key>
-      <string>Explorer Apps</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.explorer.apps</string>
-      <key>PayloadType</key>
-      <string>com.apple.functionality.whitelisted-applications</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>WhitelistedApplications</key>
-      <array>
-        <string>com.apple.mobilephone</string>
-        <string>com.apple.MobileSMS</string>
-        <string>com.apple.camera</string>
-        <string>com.google.ios.youtube</string>
-        <string>com.apple.Maps</string>
-        <string>com.apple.mobiletimer</string>
-      </array>
-    </dict>
-  </array>
-  <key>PayloadDescription</key>
-  <string>Explorer profile - enhanced features for supervised kids</string>
-  <key>PayloadDisplayName</key>
-  <string>${familyName} - Explorer</string>
-  <key>PayloadIdentifier</key>
-  <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.explorer</string>
-  <key>PayloadOrganization</key>
-  <string>Nook MDM</string>
-  <key>PayloadRemovalDisallowed</key>
-  <true/>
-  <key>PayloadType</key>
-  <string>Configuration</string>
-  <key>PayloadUUID</key>
-  <string>${this.generateUUID()}</string>
-  <key>PayloadVersion</key>
-  <integer>1</integer>
-</dict>
-</plist>`;
-  }
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>PayloadContent</key>
-  <array>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures restrictions</string>
-      <key>PayloadDisplayName</key>
-      <string>Restrictions</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.restrictions</string>
-      <key>PayloadType</key>
-      <string>com.apple.applicationaccess</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>allowAppInstallation</key>
-      <false/>
-      <key>allowCamera</key>
-      <true/>
-      <key>allowExplicitContent</key>
-      <false/>
-      <key>allowInAppPurchases</key>
-      <false/>
-      <key>allowSafari</key>
-      <true/>
-      <key>allowAccountModification</key>
-      <false/>
-      <key>allowFindMyFriendsModification</key>
-      <true/>
-      <key>allowEnterpriseAppTrust</key>
-      <false/>
-      <key>forceEncryptedBackup</key>
-      <true/>
-      <key>allowPasswordAutoFill</key>
-      <true/>
-      <key>allowPasswordSharing</key>
-      <false/>
-      <key>allowPasswordProximityRequests</key>
-      <false/>
-      <key>allowAirDrop</key>
-      <false/>
-      <key>allowAppRemoval</key>
-      <false/>
-      <key>allowAssistant</key>
-      <true/>
-      <key>allowBookstore</key>
-      <false/>
-      <key>allowCloudDocumentSync</key>
-      <true/>
-      <key>allowMusicService</key>
-      <false/>
-      <key>allowScreenshot</key>
-      <true/>
-      <key>allowSharedStream</key>
-      <false/>
-      <key>allowiTunes</key>
-      <false/>
-      <key>forceAssistantProfanityFilter</key>
-      <true/>
-      <key>forceLimitAdTracking</key>
-      <true/>
-    </dict>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures allowed apps</string>
-      <key>PayloadDisplayName</key>
-      <string>Allowed Apps</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.allowedapps</string>
-      <key>PayloadType</key>
-      <string>com.apple.functionality.whitelisted-applications</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>WhitelistedApplications</key>
-      <array>
-        <string>com.apple.mobilephone</string>
-        <string>com.apple.MobileSMS</string>
-        <string>com.apple.mobileslideshow</string>
-        <string>com.apple.mobilemail</string>
-        <string>com.apple.mobilesafari</string>
-        <string>com.apple.mobilecal</string>
-        <string>com.apple.camera</string>
-        <string>com.apple.mobilenotes</string>
-      </array>
-    </dict>
-  </array>
-  <key>PayloadDescription</key>
-  <string>Student Mode profile with educational apps and filtered web browsing</string>
-  <key>PayloadDisplayName</key>
-  <string>${familyName} - Student Mode</string>
-  <key>PayloadIdentifier</key>
-  <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.studentmode</string>
-  <key>PayloadOrganization</key>
-  <string>Nook MDM</string>
-  <key>PayloadRemovalDisallowed</key>
-  <true/>
-  <key>PayloadType</key>
-  <string>Configuration</string>
-  <key>PayloadUUID</key>
-  <string>${this.generateUUID()}</string>
-  <key>PayloadVersion</key>
-  <integer>1</integer>
-</dict>
-</plist>`;
+    const template = this.readTemplate('explorer');
+    return this.processTemplate(template, familyName);
   }
 
   // Guardian Profile - Full access with social media blocking
   static generateGuardianProfile(familyName) {
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>PayloadContent</key>
-  <array>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures restrictions for guardian mode</string>
-      <key>PayloadDisplayName</key>
-      <string>Guardian Restrictions</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.guardian.restrictions</string>
-      <key>PayloadType</key>
-      <string>com.apple.applicationaccess</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>allowAppInstallation</key>
-      <true/>
-      <key>allowCamera</key>
-      <true/>
-      <key>allowExplicitContent</key>
-      <false/>
-      <key>allowInAppPurchases</key>
-      <false/>
-      <key>allowSafari</key>
-      <true/>
-      <key>allowAccountModification</key>
-      <false/>
-      <key>allowFindMyFriendsModification</key>
-      <true/>
-      <key>allowEnterpriseAppTrust</key>
-      <false/>
-      <key>forceEncryptedBackup</key>
-      <true/>
-      <key>allowPasswordAutoFill</key>
-      <true/>
-      <key>allowPasswordSharing</key>
-      <false/>
-      <key>allowPasswordProximityRequests</key>
-      <true/>
-      <key>allowAirDrop</key>
-      <true/>
-      <key>allowAppRemoval</key>
-      <true/>
-      <key>allowAssistant</key>
-      <true/>
-      <key>allowBookstore</key>
-      <true/>
-      <key>allowCloudDocumentSync</key>
-      <true/>
-      <key>allowMusicService</key>
-      <true/>
-      <key>allowScreenshot</key>
-      <true/>
-      <key>allowSharedStream</key>
-      <true/>
-      <key>allowiTunes</key>
-      <true/>
-      <key>allowUIConfigurationProfileInstallation</key>
-      <false/>
-      <key>allowSettingsModification</key>
-      <false/>
-      <key>forceLimitAdTracking</key>
-      <true/>
-    </dict>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Blocks dangerous social media apps</string>
-      <key>PayloadDisplayName</key>
-      <string>Social Media Blocker</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.guardian.blocker</string>
-      <key>PayloadType</key>
-      <string>com.apple.functionality.blacklisted-applications</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>BlacklistedApplications</key>
-      <array>
-        <string>com.zhiliaoapp.musically</string>
-        <string>com.burbn.instagram</string>
-        <string>com.toyopagroup.picaboo</string>
-        <string>com.facebook.Facebook</string>
-        <string>com.atebits.Tweetie2</string>
-        <string>com.hammerandchisel.discord</string>
-        <string>com.bumble.app</string>
-        <string>com.cardify.tinder</string>
-        <string>com.pof.pof</string>
-        <string>com.match.match</string>
-      </array>
-    </dict>
-  </array>
-  <key>PayloadDescription</key>
-  <string>Guardian profile - full access with social media protection</string>
-  <key>PayloadDisplayName</key>
-  <string>${familyName} - Guardian</string>
-  <key>PayloadIdentifier</key>
-  <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.guardian</string>
-  <key>PayloadOrganization</key>
-  <string>Nook MDM</string>
-  <key>PayloadRemovalDisallowed</key>
-  <true/>
-  <key>PayloadType</key>
-  <string>Configuration</string>
-  <key>PayloadUUID</key>
-  <string>${this.generateUUID()}</string>
-  <key>PayloadVersion</key>
-  <integer>1</integer>
-</dict>
-</plist>`;
-  }
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>PayloadContent</key>
-  <array>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures restrictions</string>
-      <key>PayloadDisplayName</key>
-      <string>Restrictions</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.restrictions</string>
-      <key>PayloadType</key>
-      <string>com.apple.applicationaccess</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>allowAppInstallation</key>
-      <true/>
-      <key>allowCamera</key>
-      <true/>
-      <key>allowExplicitContent</key>
-      <false/>
-      <key>allowInAppPurchases</key>
-      <false/>
-      <key>allowSafari</key>
-      <true/>
-      <key>allowAccountModification</key>
-      <false/>
-      <key>allowFindMyFriendsModification</key>
-      <true/>
-      <key>allowEnterpriseAppTrust</key>
-      <false/>
-      <key>forceEncryptedBackup</key>
-      <true/>
-      <key>allowPasswordAutoFill</key>
-      <true/>
-      <key>allowPasswordSharing</key>
-      <false/>
-      <key>allowPasswordProximityRequests</key>
-      <true/>
-      <key>allowAirDrop</key>
-      <true/>
-      <key>allowAppRemoval</key>
-      <true/>
-      <key>allowAssistant</key>
-      <true/>
-      <key>allowBookstore</key>
-      <true/>
-      <key>allowCloudDocumentSync</key>
-      <true/>
-      <key>allowMusicService</key>
-      <true/>
-      <key>allowScreenshot</key>
-      <true/>
-      <key>allowSharedStream</key>
-      <true/>
-      <key>allowiTunes</key>
-      <true/>
-      <key>forceAssistantProfanityFilter</key>
-      <true/>
-      <key>forceLimitAdTracking</key>
-      <true/>
-    </dict>
-  </array>
-  <key>PayloadDescription</key>
-  <string>Balanced Teen profile with more freedom but still some limits</string>
-  <key>PayloadDisplayName</key>
-  <string>${familyName} - Balanced Teen</string>
-  <key>PayloadIdentifier</key>
-  <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.balancedteen</string>
-  <key>PayloadOrganization</key>
-  <string>Nook MDM</string>
-  <key>PayloadRemovalDisallowed</key>
-  <true/>
-  <key>PayloadType</key>
-  <string>Configuration</string>
-  <key>PayloadUUID</key>
-  <string>${this.generateUUID()}</string>
-  <key>PayloadVersion</key>
-  <integer>1</integer>
-</dict>
-</plist>`;
+    const template = this.readTemplate('guardian');
+    return this.processTemplate(template, familyName);
   }
 
   // Time Out Profile - Disciplinary mode with phone only
   static generateTimeOutProfile(familyName) {
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>PayloadContent</key>
-  <array>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures disciplinary restrictions</string>
-      <key>PayloadDisplayName</key>
-      <string>Time Out Restrictions</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.timeout.restrictions</string>
-      <key>PayloadType</key>
-      <string>com.apple.applicationaccess</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>allowAppInstallation</key>
-      <false/>
-      <key>allowCamera</key>
-      <false/>
-      <key>allowExplicitContent</key>
-      <false/>
-      <key>allowInAppPurchases</key>
-      <false/>
-      <key>allowSafari</key>
-      <false/>
-      <key>allowAccountModification</key>
-      <false/>
-      <key>allowFindMyFriendsModification</key>
-      <false/>
-      <key>allowEnterpriseAppTrust</key>
-      <false/>
-      <key>forceEncryptedBackup</key>
-      <true/>
-      <key>allowPasswordAutoFill</key>
-      <false/>
-      <key>allowPasswordSharing</key>
-      <false/>
-      <key>allowPasswordProximityRequests</key>
-      <false/>
-      <key>allowAirDrop</key>
-      <false/>
-      <key>allowAppRemoval</key>
-      <false/>
-      <key>allowAssistant</key>
-      <false/>
-      <key>allowBookstore</key>
-      <false/>
-      <key>allowCloudDocumentSync</key>
-      <false/>
-      <key>allowMusicService</key>
-      <false/>
-      <key>allowScreenshot</key>
-      <false/>
-      <key>allowSharedStream</key>
-      <false/>
-      <key>allowiTunes</key>
-      <false/>
-      <key>allowUIConfigurationProfileInstallation</key>
-      <false/>
-      <key>allowSettingsModification</key>
-      <false/>
-      <key>allowControlCenter</key>
-      <false/>
-      <key>allowNotificationCenter</key>
-      <false/>
-      <key>allowSpotlightInternetResults</key>
-      <false/>
-      <key>allowAppCellularDataModification</key>
-      <false/>
-      <key>forceLimitAdTracking</key>
-      <true/>
-    </dict>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Time out mode - phone only</string>
-      <key>PayloadDisplayName</key>
-      <string>Time Out Apps</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.timeout.apps</string>
-      <key>PayloadType</key>
-      <string>com.apple.functionality.whitelisted-applications</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>WhitelistedApplications</key>
-      <array>
-        <string>com.apple.mobilephone</string>
-      </array>
-    </dict>
-  </array>
-  <key>PayloadDescription</key>
-  <string>Time Out profile - disciplinary mode with phone access only</string>
-  <key>PayloadDisplayName</key>
-  <string>${familyName} - Time Out</string>
-  <key>PayloadIdentifier</key>
-  <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.timeout</string>
-  <key>PayloadOrganization</key>
-  <string>Nook MDM</string>
-  <key>PayloadRemovalDisallowed</key>
-  <true/>
-  <key>PayloadType</key>
-  <string>Configuration</string>
-  <key>PayloadUUID</key>
-  <string>${this.generateUUID()}</string>
-  <key>PayloadVersion</key>
-  <integer>1</integer>
-</dict>
-</plist>`;
+    const template = this.readTemplate('timeout');
+    return this.processTemplate(template, familyName);
   }
+
+  // Custom profile generator
+  static generateCustomProfile(familyName, config) {
+    const template = this.readTemplate('custom');
+    
     const { allowedApps, restrictions } = config;
     
     // Convert allowed apps to XML format
@@ -862,64 +187,13 @@ class ProfileGenerators {
       }
     }
     
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>PayloadContent</key>
-  <array>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures restrictions</string>
-      <key>PayloadDisplayName</key>
-      <string>Restrictions</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.restrictions</string>
-      <key>PayloadType</key>
-      <string>com.apple.applicationaccess</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-${restrictionsXml}
-    </dict>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures allowed apps</string>
-      <key>PayloadDisplayName</key>
-      <string>Allowed Apps</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.allowedapps</string>
-      <key>PayloadType</key>
-      <string>com.apple.functionality.whitelisted-applications</string>
-      <key>PayloadUUID</key>
-      <string>${this.generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>WhitelistedApplications</key>
-      <array>
-${appsXml}
-      </array>
-    </dict>
-  </array>
-  <key>PayloadDescription</key>
-  <string>Custom profile with personalized restrictions</string>
-  <key>PayloadDisplayName</key>
-  <string>${familyName} - Custom Profile</string>
-  <key>PayloadIdentifier</key>
-  <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.custom</string>
-  <key>PayloadOrganization</key>
-  <string>Nook MDM</string>
-  <key>PayloadRemovalDisallowed</key>
-  <true/>
-  <key>PayloadType</key>
-  <string>Configuration</string>
-  <key>PayloadUUID</key>
-  <string>${this.generateUUID()}</string>
-  <key>PayloadVersion</key>
-  <integer>1</integer>
-</dict>
-</plist>`;
+    // Custom replacements for this profile
+    const customReplacements = {
+      '{{ALLOWED_APPS}}': appsXml,
+      '{{RESTRICTIONS}}': restrictionsXml
+    };
+    
+    return this.processTemplate(template, familyName, customReplacements);
   }
 }
 

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadDescription</key>
+      <string>Configures custom restrictions</string>
+      <key>PayloadDisplayName</key>
+      <string>Custom Restrictions</string>
+      <key>PayloadIdentifier</key>
+      <string>com.nook.{{FAMILY_SLUG}}.custom.restrictions</string>
+      <key>PayloadType</key>
+      <string>com.apple.applicationaccess</string>
+      <key>PayloadUUID</key>
+      <string>{{UUID_1}}</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      {{RESTRICTIONS}}
+    </dict>
+    <dict>
+      <key>PayloadDescription</key>
+      <string>Configures allowed apps</string>
+      <key>PayloadDisplayName</key>
+      <string>Custom Allowed Apps</string>
+      <key>PayloadIdentifier</key>
+      <string>com.nook.{{FAMILY_SLUG}}.custom.apps</string>
+      <key>PayloadType</key>
+      <string>com.apple.applicationaccess</string>
+      <key>PayloadUUID</key>
+      <string>{{UUID_2}}</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>whitelistedAppBundleIDs</key>
+      <array>
+        {{ALLOWED_APPS}}
+      </array>
+    </dict>
+  </array>
+  <key>PayloadDescription</key>
+  <string>Custom profile with personalized restrictions</string>
+  <key>PayloadDisplayName</key>
+  <string>{{FAMILY_NAME}} - Custom Profile</string>
+  <key>PayloadIdentifier</key>
+  <string>com.nook.{{FAMILY_SLUG}}.custom</string>
+  <key>PayloadOrganization</key>
+  <string>Nook MDM</string>
+  <key>PayloadRemovalDisallowed</key>
+  <true/>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadUUID</key>
+  <string>{{UUID_MAIN}}</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+</dict>
+</plist>

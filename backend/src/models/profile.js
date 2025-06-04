@@ -8,6 +8,7 @@ class Profile {
       name, 
       familyId, 
       simpleMdmProfileId, 
+      masterProfileId,
       type, 
       description, 
       config 
@@ -15,10 +16,10 @@ class Profile {
     
     try {
       const result = await db.query(
-        `INSERT INTO profiles (name, family_id, simplemdm_profile_id, type, description, config)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, name, family_id, simplemdm_profile_id, type, description, config, created_at`,
-        [name, familyId, simpleMdmProfileId, type, description, config]
+        `INSERT INTO profiles (name, family_id, simplemdm_profile_id, master_profile_id, type, description, config)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, name, family_id, simplemdm_profile_id, master_profile_id, type, description, config, created_at`,
+        [name, familyId, simpleMdmProfileId, masterProfileId, type, description, config]
       );
       
       return result.rows[0];
@@ -30,7 +31,7 @@ class Profile {
   // Find profile by ID
   static async findById(id) {
     const result = await db.query(
-      `SELECT id, name, family_id, simplemdm_profile_id, type, description, config, created_at, updated_at
+      `SELECT id, name, family_id, simplemdm_profile_id, master_profile_id, type, description, config, created_at, updated_at
        FROM profiles
        WHERE id = $1`,
       [id]
@@ -42,7 +43,7 @@ class Profile {
   // Find profile by SimpleMDM ID
   static async findBySimpleMdmId(simpleMdmProfileId) {
     const result = await db.query(
-      `SELECT id, name, family_id, simplemdm_profile_id, type, description, config, created_at, updated_at
+      `SELECT id, name, family_id, simplemdm_profile_id, master_profile_id, type, description, config, created_at, updated_at
        FROM profiles
        WHERE simplemdm_profile_id = $1`,
       [simpleMdmProfileId]
@@ -54,11 +55,24 @@ class Profile {
   // Find profiles by family ID
   static async findByFamilyId(familyId) {
     const result = await db.query(
-      `SELECT id, name, family_id, simplemdm_profile_id, type, description, config, created_at, updated_at
+      `SELECT id, name, family_id, simplemdm_profile_id, master_profile_id, type, description, config, created_at, updated_at
        FROM profiles
        WHERE family_id = $1
        ORDER BY created_at DESC`,
       [familyId]
+    );
+    
+    return result.rows;
+  }
+
+  // Find profiles by master profile ID
+  static async findByMasterProfileId(masterProfileId) {
+    const result = await db.query(
+      `SELECT id, name, family_id, simplemdm_profile_id, master_profile_id, type, description, config, created_at, updated_at
+       FROM profiles
+       WHERE master_profile_id = $1
+       ORDER BY created_at DESC`,
+      [masterProfileId]
     );
     
     return result.rows;
@@ -69,6 +83,7 @@ class Profile {
     const { 
       name, 
       simpleMdmProfileId, 
+      masterProfileId,
       description, 
       config 
     } = profileData;
@@ -77,12 +92,13 @@ class Profile {
       `UPDATE profiles
        SET name = $1, 
            simplemdm_profile_id = $2, 
-           description = $3, 
-           config = $4, 
+           master_profile_id = $3,
+           description = $4, 
+           config = $5, 
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $5
-       RETURNING id, name, family_id, simplemdm_profile_id, type, description, config, created_at, updated_at`,
-      [name, simpleMdmProfileId, description, config, id]
+       WHERE id = $6
+       RETURNING id, name, family_id, simplemdm_profile_id, master_profile_id, type, description, config, created_at, updated_at`,
+      [name, simpleMdmProfileId, masterProfileId, description, config, id]
     );
     
     if (result.rows.length === 0) {
@@ -138,141 +154,61 @@ class Profile {
     
     return true;
   }
-  
-  // Get default profile configurations with metadata from ProfileGenerators
-  static getDefaultProfiles() {
-    const metadata = ProfileGenerators.getProfileMetadata();
-    
-    return {
-      essential_kids: {
-        name: metadata.essential_kids.name,
-        type: 'essential_kids',
-        description: metadata.essential_kids.description,
-        ageRange: metadata.essential_kids.ageRange,
-        config: {
-          allowed_apps: metadata.essential_kids.allowedApps,
-          restrictions: {
-            allow_app_installation: false,
-            allow_camera: true,
-            allow_safari: false,
-            allow_itunes: false,
-            allow_in_app_purchases: false,
-            allow_explicit_content: false,
-            allow_account_modification: false,
-            allow_find_my_friends: false,
-            force_encrypted_backup: true,
-            allow_passcode_modification: false,
-            allow_device_name_modification: false,
-            allow_cellular_data_modification: false,
-            allow_host_pairing: false,
-            allow_screen_time_modification: false
-          },
-          screen_time_limits: {
-            weekday_usage_limit_minutes: 60,
-            weekend_usage_limit_minutes: 120,
-            bedtime_hours: {
-              start_hour: 20, // 8 PM
-              end_hour: 7 // 7 AM
-            }
-          }
-        }
-      },
-      student_mode: {
-        name: metadata.student_mode.name,
-        type: 'student_mode',
-        description: metadata.student_mode.description,
-        ageRange: metadata.student_mode.ageRange,
-        config: {
-          allowed_apps: metadata.student_mode.allowedApps,
-          restrictions: {
-            allow_app_installation: false,
-            allow_camera: true,
-            allow_safari: true,
-            safari_content_filter: {
-              enabled: true,
-              whitelist_only: true,
-              whitelisted_domains: [
-                'wikipedia.org',
-                'khanacademy.org',
-                'education.com',
-                'scholastic.com',
-                'newsela.com'
-              ]
-            },
-            allow_itunes: false,
-            allow_in_app_purchases: false,
-            allow_explicit_content: false,
-            allow_account_modification: false,
-            allow_find_my_friends: true,
-            force_encrypted_backup: true,
-            allow_passcode_modification: true,
-            allow_device_name_modification: false,
-            allow_cellular_data_modification: false,
-            allow_host_pairing: false,
-            allow_screen_time_modification: false
-          },
-          screen_time_limits: {
-            weekday_usage_limit_minutes: 120,
-            weekend_usage_limit_minutes: 180,
-            bedtime_hours: {
-              start_hour: 21, // 9 PM
-              end_hour: 6 // 6 AM
-            }
-          }
-        }
-      },
-      balanced_teen: {
-        name: metadata.balanced_teen.name,
-        type: 'balanced_teen',
-        description: metadata.balanced_teen.description,
-        ageRange: metadata.balanced_teen.ageRange,
-        config: {
-          allowed_apps: metadata.balanced_teen.allowedApps,
-          restrictions: {
-            allow_app_installation: true,
-            allow_camera: true,
-            allow_safari: true,
-            safari_content_filter: {
-              enabled: true,
-              blacklist_only: true,
-              blacklisted_domains: [
-                'adult-content-domains.com'
-              ]
-            },
-            allow_itunes: true,
-            allow_in_app_purchases: false,
-            allow_explicit_content: false,
-            allow_account_modification: false,
-            allow_find_my_friends: true,
-            force_encrypted_backup: true,
-            allow_passcode_modification: true,
-            allow_device_name_modification: true,
-            allow_cellular_data_modification: true,
-            allow_host_pairing: true,
-            allow_screen_time_modification: false
-          },
-          screen_time_limits: {
-            weekday_usage_limit_minutes: 180,
-            weekend_usage_limit_minutes: 240,
-            bedtime_hours: {
-              start_hour: 22, // 10 PM
-              end_hour: 6 // 6 AM
-            },
-            app_specific_limits: {
-              'com.burbn.instagram': 30, // 30 min/day
-              'com.atebits.Tweetie2': 30, // 30 min/day
-              'com.google.ios.youtube': 60 // 60 min/day
-            }
-          }
-        }
-      }
-    };
-  }
 
-  // Get profile metadata (name, description, age range) for a given type
+  // Get profile metadata (name, description, target) for a given type
   static getProfileMetadata(type) {
     const metadata = ProfileGenerators.getProfileMetadata();
     return metadata[type] || null;
+  }
+
+  // Get effective SimpleMDM profile ID (either individual or from master profile)
+  static async getEffectiveSimpleMdmId(profileId) {
+    const profile = await this.findById(profileId);
+    
+    if (!profile) {
+      return null;
+    }
+    
+    // If profile has individual SimpleMDM ID (custom profiles)
+    if (profile.simplemdm_profile_id) {
+      return profile.simplemdm_profile_id;
+    }
+    
+    // If profile uses master profile, get master profile's SimpleMDM ID
+    if (profile.master_profile_id) {
+      const MasterProfile = require('./masterProfile');
+      const masterProfile = await MasterProfile.getByType(profile.type);
+      return masterProfile ? masterProfile.simplemdm_profile_id : null;
+    }
+    
+    return null;
+  }
+
+  // Check if profile is using shared master profile
+  static isUsingMasterProfile(profile) {
+    return profile.master_profile_id !== null && profile.simplemdm_profile_id === null;
+  }
+
+  // Check if profile is custom (has individual SimpleMDM profile)
+  static isCustomProfile(profile) {
+    return profile.type === 'custom' && profile.simplemdm_profile_id !== null;
+  }
+
+  // Get summary of profile usage across families
+  static async getUsageSummary() {
+    const result = await db.query(`
+      SELECT 
+        type,
+        COUNT(*) as total_profiles,
+        COUNT(DISTINCT family_id) as families_using,
+        COUNT(CASE WHEN master_profile_id IS NOT NULL THEN 1 END) as using_master_profile,
+        COUNT(CASE WHEN simplemdm_profile_id IS NOT NULL THEN 1 END) as individual_profiles
+      FROM profiles 
+      GROUP BY type
+      ORDER BY total_profiles DESC
+    `);
+    
+    return result.rows;
   }
 }
 

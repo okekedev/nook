@@ -1,6 +1,7 @@
 const express = require('express');
 const Family = require('../models/family');
 const Profile = require('../models/profile');
+const MasterProfile = require('../models/masterProfile');
 const simpleMdmService = require('../services/simpleMdmService');
 const { authenticateToken, isParent, isFamilyMember } = require('../middleware/auth');
 const { validateFamilyCreation, validateProfileCreation } = require('../middleware/validation');
@@ -118,7 +119,7 @@ router.put('/:id', isParent, isFamilyMember, validateFamilyCreation, async (req,
   }
 });
 
-// Delete a family
+// ENHANCED Delete a family with complete cleanup
 router.delete('/:id', isParent, isFamilyMember, async (req, res) => {
   try {
     const familyId = req.params.id;
@@ -130,14 +131,45 @@ router.delete('/:id', isParent, isFamilyMember, async (req, res) => {
       return res.status(404).json({ error: 'Family not found' });
     }
     
-    // Delete device group in SimpleMDM
-    await simpleMdmService.deleteDeviceGroup(currentFamily.simplemdm_group_id);
+    // CRITICAL: Clean up SimpleMDM assignments before deleting database records
+    try {
+      // Get all family profiles to clean up assignments
+      const familyProfiles = await Profile.findByFamilyId(familyId);
+      
+      for (const profile of familyProfiles) {
+        // Clean up custom profiles
+        if (profile.type === 'custom' && profile.simplemdm_profile_id) {
+          await simpleMdmService.deleteProfile(profile.simplemdm_profile_id);
+          console.log(`Deleted custom SimpleMDM profile: ${profile.simplemdm_profile_id}`);
+        }
+        
+        // Clean up master profile assignments
+        if (profile.master_profile_id && currentFamily.simplemdm_group_id) {
+          const masterProfile = await MasterProfile.getByType(profile.type);
+          if (masterProfile) {
+            await simpleMdmService.removeProfileFromGroup(
+              masterProfile.simplemdm_profile_id, 
+              currentFamily.simplemdm_group_id
+            );
+            console.log(`Removed master profile ${masterProfile.simplemdm_profile_id} from group ${currentFamily.simplemdm_group_id}`);
+          }
+        }
+      }
+      
+      // Delete device group in SimpleMDM
+      await simpleMdmService.deleteDeviceGroup(currentFamily.simplemdm_group_id);
+      console.log(`Deleted SimpleMDM device group: ${currentFamily.simplemdm_group_id}`);
+      
+    } catch (simpleMdmError) {
+      console.error('SimpleMDM cleanup error during family deletion:', simpleMdmError);
+      // Continue with database deletion even if SimpleMDM cleanup fails
+    }
     
     // Delete family in database (will cascade delete members, profiles, devices)
     await Family.delete(familyId);
     
     res.json({
-      message: 'Family deleted successfully'
+      message: 'Family and all associated data deleted successfully from both database and SimpleMDM'
     });
   } catch (error) {
     console.error('Delete Family Error:', error);
@@ -158,14 +190,30 @@ router.get('/:id/profiles', isFamilyMember, async (req, res) => {
     // Get profiles from database
     const profiles = await Profile.findByFamilyId(familyId);
     
-    res.json({ profiles });
+    // Enrich profiles with master profile information
+    const enrichedProfiles = await Promise.all(profiles.map(async (profile) => {
+      if (profile.master_profile_id) {
+        const masterProfile = await MasterProfile.getByType(profile.type);
+        return {
+          ...profile,
+          masterProfile: masterProfile ? {
+            id: masterProfile.id,
+            name: masterProfile.name,
+            simpleMdmId: masterProfile.simplemdm_profile_id
+          } : null
+        };
+      }
+      return profile;
+    }));
+    
+    res.json({ profiles: enrichedProfiles });
   } catch (error) {
     console.error('Get Family Profiles Error:', error);
     res.status(500).json({ error: 'Server error retrieving family profiles' });
   }
 });
 
-// Create a profile for a family
+// Create a profile for a family (using shared master profiles)
 router.post('/:id/profiles', isParent, isFamilyMember, validateProfileCreation, async (req, res) => {
   try {
     const familyId = req.params.id;
@@ -179,49 +227,84 @@ router.post('/:id/profiles', isParent, isFamilyMember, validateProfileCreation, 
     }
     
     // Validate profile type
-    if (!['essential_kids', 'student_mode', 'balanced_teen', 'custom'].includes(type)) {
+    if (!['first_phone', 'explorer', 'guardian', 'time_out', 'custom'].includes(type)) {
       return res.status(400).json({ 
-        error: 'Invalid profile type. Must be one of: essential_kids, student_mode, balanced_teen, custom' 
+        error: 'Invalid profile type. Must be one of: first_phone, explorer, guardian, time_out, custom' 
       });
     }
     
-    // Generate profile XML based on type
-    let mobileconfig;
+    let masterProfileId = null;
+    let finalConfig;
+    let profileDescription;
     
-    if (type === 'essential_kids') {
-      mobileconfig = simpleMdmService.generateEssentialKidsProfile(family.name);
-    } else if (type === 'student_mode') {
-      mobileconfig = simpleMdmService.generateStudentModeProfile(family.name);
-    } else if (type === 'balanced_teen') {
-      mobileconfig = simpleMdmService.generateBalancedTeenProfile(family.name);
-    } else if (type === 'custom') {
+    if (type === 'custom') {
+      // Custom profiles still create individual SimpleMDM profiles
       if (!config) {
         return res.status(400).json({ error: 'Config is required for custom profiles' });
       }
       
-      mobileconfig = simpleMdmService.generateCustomProfile(family.name, config);
+      const mobileconfig = simpleMdmService.generateCustomProfile(family.name, config);
+      
+      // Create individual SimpleMDM profile for custom profiles
+      const simpleMdmProfile = await simpleMdmService.createProfile(name, mobileconfig);
+      
+      // Assign to family's device group
+      await simpleMdmService.assignProfileToGroup(simpleMdmProfile.id, family.simplemdm_group_id);
+      
+      // Create profile in database
+      const profile = await Profile.create({
+        name,
+        familyId,
+        simpleMdmProfileId: simpleMdmProfile.id,
+        masterProfileId: null,
+        type,
+        description: description || 'Custom profile with personalized restrictions',
+        config: config
+      });
+      
+      return res.status(201).json({
+        message: 'Custom profile created successfully',
+        profile
+      });
+    } else {
+      // Use shared master profiles for predefined types
+      const masterProfile = await MasterProfile.getByType(type);
+      
+      if (!masterProfile) {
+        return res.status(404).json({ 
+          error: `Master profile for type '${type}' not found. Please run setup-master-profiles.js first.` 
+        });
+      }
+      
+      masterProfileId = masterProfile.id;
+      finalConfig = Profile.getProfileMetadata(type);
+      profileDescription = masterProfile.description;
+      
+      // Assign existing master profile to family's device group
+      console.log(`Assigning master profile ${masterProfile.simplemdm_profile_id} to device group ${family.simplemdm_group_id}`);
+      await simpleMdmService.assignProfileToGroup(masterProfile.simplemdm_profile_id, family.simplemdm_group_id);
+      
+      // Create profile record in database (references master profile)
+      const profile = await Profile.create({
+        name,
+        familyId,
+        simpleMdmProfileId: null, // No individual SimpleMDM profile for predefined types
+        masterProfileId: masterProfileId,
+        type,
+        description: profileDescription,
+        config: finalConfig
+      });
+      
+      res.status(201).json({
+        message: 'Profile created successfully using shared master profile',
+        profile,
+        masterProfile: {
+          id: masterProfile.id,
+          name: masterProfile.name,
+          simpleMdmId: masterProfile.simplemdm_profile_id
+        }
+      });
     }
-    
-    // Create profile in SimpleMDM
-    const simpleMdmProfile = await simpleMdmService.createProfile(name, mobileconfig);
-    
-    // Assign profile to assignment group in SimpleMDM
-    await simpleMdmService.assignProfileToGroup(simpleMdmProfile.id, family.simplemdm_group_id);
-    
-    // Create profile in database
-    const profile = await Profile.create({
-      name,
-      familyId,
-      simpleMdmProfileId: simpleMdmProfile.id,
-      type,
-      description,
-      config: config || Profile.getDefaultProfiles()[type].config
-    });
-    
-    res.status(201).json({
-      message: 'Profile created successfully',
-      profile
-    });
   } catch (error) {
     console.error('Create Profile Error:', error);
     
@@ -230,21 +313,6 @@ router.post('/:id/profiles', isParent, isFamilyMember, validateProfileCreation, 
     }
     
     res.status(500).json({ error: 'Server error during profile creation' });
-  }
-});
-
-// Get all profiles for a family
-router.get('/:id/profiles', isFamilyMember, async (req, res) => {
-  try {
-    const familyId = req.params.id;
-    
-    // Get profiles from database
-    const profiles = await Profile.findByFamilyId(familyId);
-    
-    res.json({ profiles });
-  } catch (error) {
-    console.error('Get Family Profiles Error:', error);
-    res.status(500).json({ error: 'Server error retrieving family profiles' });
   }
 });
 

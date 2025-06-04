@@ -91,9 +91,9 @@ const validateProfileCreation = (req, res, next) => {
   if (!type) errors.push('Profile type is required');
   if (!familyId) errors.push('Family ID is required');
   
-  // Check type
-  if (type && !['essential_kids', 'student_mode', 'balanced_teen', 'custom'].includes(type)) {
-    errors.push('Profile type must be either "essential_kids", "student_mode", "balanced_teen", or "custom"');
+  // Check type - UPDATED FOR NEW PROFILE TYPES
+  if (type && !['first_phone', 'explorer', 'guardian', 'time_out', 'custom'].includes(type)) {
+    errors.push('Profile type must be one of: first_phone, explorer, guardian, time_out, custom');
   }
   
   // Check familyId is a number

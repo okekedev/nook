@@ -198,6 +198,16 @@ class SimpleMDMService {
     }
   }
 
+  // Delete a device from SimpleMDM
+  async deleteDevice(deviceId) {
+    try {
+      await this.client.delete(`/devices/${deviceId}`);
+      return true;
+    } catch (error) {
+      this.handleApiError(error);
+    }
+  }
+
   // ==========================================
   // CONFIGURATION PROFILES
   // ==========================================
@@ -280,25 +290,6 @@ class SimpleMDMService {
     }
   }
 
-  async removeProfileFromGroup(profileId, deviceGroupId) {
-    try {
-      // Find the assignment group first, then delete it
-      // This is a simplified version - in practice you'd need to find the assignment group ID
-      const assignmentGroups = await this.client.get('/assignment_groups');
-      const assignment = assignmentGroups.data.data.find(ag => 
-        ag.relationships.custom_configuration_profile?.data?.id == profileId &&
-        ag.relationships.device_group?.data?.id == deviceGroupId
-      );
-      
-      if (assignment) {
-        await this.client.delete(`/assignment_groups/${assignment.id}`);
-      }
-      return true;
-    } catch (error) {
-      this.handleApiError(error);
-    }
-  }
-
   async assignProfileToDevice(profileId, deviceId) {
     try {
       // Create an assignment group that links the profile to a specific device
@@ -313,19 +304,179 @@ class SimpleMDMService {
     }
   }
 
+  // ==========================================
+  // ASSIGNMENT GROUPS MANAGEMENT
+  // ==========================================
+
+  // Get all assignment groups (for debugging/admin purposes)
+  async getAllAssignmentGroups() {
+    try {
+      const response = await this.client.get('/assignment_groups');
+      return response.data.data;
+    } catch (error) {
+      this.handleApiError(error);
+    }
+  }
+
+  // Remove a specific assignment group by ID
+  async removeAssignmentGroup(assignmentGroupId) {
+    try {
+      await this.client.delete(`/assignment_groups/${assignmentGroupId}`);
+      return true;
+    } catch (error) {
+      this.handleApiError(error);
+    }
+  }
+
+  // Get assignment group by profile and group combination
+  async getAssignmentGroup(profileId, deviceGroupId) {
+    try {
+      const assignmentGroups = await this.getAllAssignmentGroups();
+      
+      const assignment = assignmentGroups.find(ag => 
+        ag.relationships.custom_configuration_profile?.data?.id == profileId &&
+        ag.relationships.device_group?.data?.id == deviceGroupId
+      );
+      
+      return assignment || null;
+    } catch (error) {
+      this.handleApiError(error);
+    }
+  }
+
+  // Get profiles assigned to a device group
+  async getGroupProfiles(deviceGroupId) {
+    try {
+      const response = await this.client.get(`/assignment_groups`);
+      
+      // Filter assignment groups for this device group
+      const groupAssignments = response.data.data.filter(assignment => {
+        return assignment.relationships.device_group?.data?.id == deviceGroupId;
+      });
+      
+      // Extract profile information
+      const profileAssignments = groupAssignments.map(assignment => ({
+        assignment_id: assignment.id,
+        profile_id: assignment.relationships.custom_configuration_profile?.data?.id,
+        device_group_id: deviceGroupId,
+        auto_deploy: assignment.attributes.auto_deploy
+      }));
+      
+      return profileAssignments;
+    } catch (error) {
+      this.handleApiError(error);
+    }
+  }
+
+  // Get profiles assigned to a specific device
+  async getDeviceProfiles(deviceId) {
+    try {
+      const response = await this.client.get(`/assignment_groups`);
+      
+      // Filter assignment groups for this device
+      const deviceAssignments = response.data.data.filter(assignment => {
+        return assignment.relationships.device?.data?.id == deviceId;
+      });
+      
+      // Extract profile information
+      const profileAssignments = deviceAssignments.map(assignment => ({
+        assignment_id: assignment.id,
+        profile_id: assignment.relationships.custom_configuration_profile?.data?.id,
+        device_id: deviceId,
+        auto_deploy: assignment.attributes.auto_deploy
+      }));
+      
+      return profileAssignments;
+    } catch (error) {
+      this.handleApiError(error);
+    }
+  }
+
+  // Enhanced removeProfileFromGroup with better error handling
+  async removeProfileFromGroup(profileId, deviceGroupId) {
+    try {
+      // Find the specific assignment group
+      const assignment = await this.getAssignmentGroup(profileId, deviceGroupId);
+      
+      if (assignment) {
+        await this.removeAssignmentGroup(assignment.id);
+        console.log(`Removed assignment group ${assignment.id} (Profile: ${profileId}, Group: ${deviceGroupId})`);
+        return true;
+      } else {
+        console.log(`No assignment found for Profile: ${profileId}, Group: ${deviceGroupId}`);
+        return false;
+      }
+    } catch (error) {
+      this.handleApiError(error);
+    }
+  }
+
+  // Enhanced removeProfileFromDevice with better error handling  
   async removeProfileFromDevice(profileId, deviceId) {
     try {
-      // Find the assignment group first, then delete it
-      const assignmentGroups = await this.client.get('/assignment_groups');
-      const assignment = assignmentGroups.data.data.find(ag => 
+      // Find the assignment group first
+      const assignmentGroups = await this.getAllAssignmentGroups();
+      const assignment = assignmentGroups.find(ag => 
         ag.relationships.custom_configuration_profile?.data?.id == profileId &&
         ag.relationships.device?.data?.id == deviceId
       );
       
       if (assignment) {
-        await this.client.delete(`/assignment_groups/${assignment.id}`);
+        await this.removeAssignmentGroup(assignment.id);
+        console.log(`Removed device assignment ${assignment.id} (Profile: ${profileId}, Device: ${deviceId})`);
+        return true;
+      } else {
+        console.log(`No assignment found for Profile: ${profileId}, Device: ${deviceId}`);
+        return false;
       }
-      return true;
+    } catch (error) {
+      this.handleApiError(error);
+    }
+  }
+
+  // Sync verification - check if profile is actually assigned
+  async verifyProfileAssignment(profileId, deviceGroupId) {
+    try {
+      const assignment = await this.getAssignmentGroup(profileId, deviceGroupId);
+      return assignment !== null;
+    } catch (error) {
+      console.error('Error verifying profile assignment:', error);
+      return false;
+    }
+  }
+
+  // Clean up orphaned assignment groups
+  async cleanupOrphanedAssignments() {
+    try {
+      const assignmentGroups = await this.getAllAssignmentGroups();
+      const orphanedAssignments = [];
+      
+      for (const assignment of assignmentGroups) {
+        // Check if the referenced profile still exists
+        const profileId = assignment.relationships.custom_configuration_profile?.data?.id;
+        if (profileId) {
+          try {
+            await this.getProfile(profileId);
+          } catch (error) {
+            if (error.status === 404) {
+              // Profile doesn't exist, this is orphaned
+              orphanedAssignments.push(assignment.id);
+            }
+          }
+        }
+      }
+      
+      // Remove orphaned assignments
+      for (const assignmentId of orphanedAssignments) {
+        await this.removeAssignmentGroup(assignmentId);
+        console.log(`Removed orphaned assignment group: ${assignmentId}`);
+      }
+      
+      return {
+        total_assignments: assignmentGroups.length,
+        orphaned_removed: orphanedAssignments.length,
+        remaining_assignments: assignmentGroups.length - orphanedAssignments.length
+      };
     } catch (error) {
       this.handleApiError(error);
     }

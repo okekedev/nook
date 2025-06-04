@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadDescription</key>
+      <string>Configures restrictions for first phone</string>
+      <key>PayloadDisplayName</key>
+      <string>First Phone Restrictions</string>
+      <key>PayloadIdentifier</key>
+      <string>com.nook.{{FAMILY_SLUG}}.firstphone.restrictions</string>
+      <key>PayloadType</key>
+      <string>com.apple.applicationaccess</string>
+      <key>PayloadUUID</key>
+      <string>{{UUID_1}}</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>allowAppInstallation</key>
+      <false/>
+      <key>allowCamera</key>
+      <false/>
+      <key>allowExplicitContent</key>
+      <false/>
+      <key>allowInAppPurchases</key>
+      <false/>
+      <key>allowSafari</key>
+      <false/>
+      <key>allowAccountModification</key>
+      <false/>
+      <key>allowFindMyFriendsModification</key>
+      <false/>
+      <key>allowEnterpriseAppTrust</key>
+      <false/>
+      <key>forceEncryptedBackup</key>
+      <true/>
+      <key>allowPasswordAutoFill</key>
+      <false/>
+      <key>allowPasswordSharing</key>
+      <false/>
+      <key>allowPasswordProximityRequests</key>
+      <false/>
+      <key>allowAirDrop</key>
+      <false/>
+      <key>allowAppRemoval</key>
+      <false/>
+      <key>allowAssistant</key>
+      <false/>
+      <key>allowBookstore</key>
+      <false/>
+      <key>allowCloudDocumentSync</key>
+      <false/>
+      <key>allowMusicService</key>
+      <false/>
+      <key>allowScreenshot</key>
+      <false/>
+      <key>allowSharedStream</key>
+      <false/>
+      <key>allowiTunes</key>
+      <false/>
+      <key>allowUIConfigurationProfileInstallation</key>
+      <false/>
+      <key>allowSettingsModification</key>
+      <false/>
+      <key>allowControlCenter</key>
+      <false/>
+      <key>allowNotificationCenter</key>
+      <false/>
+      <key>forceLimitAdTracking</key>
+      <true/>
+      <key>allowPasscodeModification</key>
+      <false/>
+      <key>allowDeviceNameModification</key>
+      <false/>
+    </dict>
+    <dict>
+      <key>PayloadDescription</key>
+      <string>Configures allowed apps for first phone</string>
+      <key>PayloadDisplayName</key>
+      <string>First Phone Apps</string>
+      <key>PayloadIdentifier</key>
+      <string>com.nook.{{FAMILY_SLUG}}.firstphone.apps</string>
+      <key>PayloadType</key>
+      <string>com.apple.applicationaccess</string>
+      <key>PayloadUUID</key>
+      <string>{{UUID_2}}</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>whitelistedAppBundleIDs</key>
+      <array>
+        <string>com.apple.mobilephone</string>
+        <string>com.apple.MobileSMS</string>
+      </array>
+    </dict>
+  </array>
+  <key>PayloadDescription</key>
+  <string>First Phone profile - Phone and Messages only for young children</string>
+  <key>PayloadDisplayName</key>
+  <string>{{FAMILY_NAME}} - First Phone</string>
+  <key>PayloadIdentifier</key>
+  <string>com.nook.{{FAMILY_SLUG}}.firstphone</string>
+  <key>PayloadOrganization</key>
+  <string>Nook MDM</string>
+  <key>PayloadRemovalDisallowed</key>
+  <true/>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadUUID</key>
+  <string>{{UUID_MAIN}}</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+</dict>
+</plist>
