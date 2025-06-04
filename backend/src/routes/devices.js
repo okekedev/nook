@@ -62,6 +62,75 @@ router.post('/', validateDeviceCreation, async (req, res) => {
   }
 });
 
+
+// Add these 2 essential routes to your existing device routes
+
+// Get ALL devices across all families (parent dashboard overview)
+router.get('/', isParent, async (req, res) => {
+  try {
+    // Get all families for this parent
+    const families = await Family.findByParentId(req.user.id);
+    
+    // Get devices for all families
+    let allDevices = [];
+    for (const family of families) {
+      const familyDevices = await Device.findByFamilyId(family.id);
+      allDevices = allDevices.concat(familyDevices.map(device => ({
+        ...device,
+        family_name: family.name
+      })));
+    }
+    
+    res.json({ 
+      devices: allDevices,
+      total: allDevices.length,
+      families: families.length
+    });
+  } catch (error) {
+    console.error('Get All Devices Error:', error);
+    res.status(500).json({ error: 'Server error retrieving devices' });
+  }
+});
+
+// Get devices by user (useful for child users to see their devices)
+router.get('/user/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    
+    // Check if requesting own devices (child) or parent checking child's devices
+    if (req.user.role === 'child' && req.user.id !== parseInt(userId)) {
+      return res.status(403).json({ error: 'Access denied: Can only view your own devices' });
+    }
+    
+    if (req.user.role === 'parent') {
+      // Verify the user belongs to parent's family
+      const User = require('../models/user'); // Add this import
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      // Check if user is in any of parent's families
+      const families = await Family.findByParentId(req.user.id);
+      const userInFamily = await Promise.all(
+        families.map(async family => {
+          const members = await Family.getMembers(family.id);
+          return members.some(member => member.id === parseInt(userId));
+        })
+      );
+      
+      if (!userInFamily.some(inFamily => inFamily)) {
+        return res.status(403).json({ error: 'Access denied: User not in your families' });
+      }
+    }
+    
+    const devices = await Device.findByUserId(userId);
+    res.json({ devices });
+  } catch (error) {
+    console.error('Get User Devices Error:', error);
+    res.status(500).json({ error: 'Server error retrieving user devices' });
+  }
+});
 // Get all devices for a family
 router.get('/family/:familyId', async (req, res) => {
   try {

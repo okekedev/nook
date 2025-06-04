@@ -7,7 +7,7 @@ const dotenv = require('dotenv');
 // Load environment variables
 dotenv.config();
 
-// Import routes (we'll create these next)
+// Import routes
 const authRoutes = require('./src/routes/auth');
 const familyRoutes = require('./src/routes/families');
 const deviceRoutes = require('./src/routes/devices');
