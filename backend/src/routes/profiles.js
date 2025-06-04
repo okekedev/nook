@@ -2,13 +2,118 @@ const express = require('express');
 const Profile = require('../models/profile');
 const Family = require('../models/family');
 const simpleMdmService = require('../services/simpleMdmService');
-const { authenticateToken, isParent, isFamilyMember } = require('../middleware/auth');
+const { authenticateToken, isParent } = require('../middleware/auth');
 const { validateProfileCreation } = require('../middleware/validation');
 
 const router = express.Router();
 
 // Middleware to protect all routes
 router.use(authenticateToken);
+
+// Create a profile (standalone, not family-specific)
+router.post('/', isParent, async (req, res) => {
+  try {
+    const { name, familyId, type, description, config } = req.body;
+    
+    // Validate required fields
+    if (!name || !familyId || !type) {
+      return res.status(400).json({ 
+        error: 'Name, familyId, and type are required' 
+      });
+    }
+    
+    // Get family data to ensure user has access
+    const family = await Family.findById(familyId);
+    
+    if (!family) {
+      return res.status(404).json({ error: 'Family not found' });
+    }
+    
+    // Check if user is the parent of this family
+    if (family.parent_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied: Not the parent of this family' });
+    }
+    
+    // Validate profile type
+    if (!['essential_kids', 'student_mode', 'balanced_teen', 'custom'].includes(type)) {
+      return res.status(400).json({ 
+        error: 'Invalid profile type. Must be one of: essential_kids, student_mode, balanced_teen, custom' 
+      });
+    }
+    
+    // Generate profile XML and get metadata based on type
+    let mobileconfig;
+    let finalConfig = config;
+    let profileDescription;
+    
+    if (type === 'essential_kids') {
+      mobileconfig = simpleMdmService.generateEssentialKidsProfile(family.name);
+      finalConfig = Profile.getDefaultProfiles().essential_kids.config;
+      profileDescription = Profile.getProfileMetadata('essential_kids').description;
+    } else if (type === 'student_mode') {
+      mobileconfig = simpleMdmService.generateStudentModeProfile(family.name);
+      finalConfig = Profile.getDefaultProfiles().student_mode.config;
+      profileDescription = Profile.getProfileMetadata('student_mode').description;
+    } else if (type === 'balanced_teen') {
+      mobileconfig = simpleMdmService.generateBalancedTeenProfile(family.name);
+      finalConfig = Profile.getDefaultProfiles().balanced_teen.config;
+      profileDescription = Profile.getProfileMetadata('balanced_teen').description;
+    } else if (type === 'custom') {
+      if (!config) {
+        return res.status(400).json({ error: 'Config is required for custom profiles' });
+      }
+      
+      mobileconfig = simpleMdmService.generateCustomProfile(family.name, config);
+      finalConfig = config;
+      profileDescription = description || 'Custom profile with personalized restrictions';
+    }
+    
+    console.log('Creating SimpleMDM profile with name:', name);
+    console.log('Profile XML length:', mobileconfig.length);
+    
+    // Create profile in SimpleMDM
+    const simpleMdmProfile = await simpleMdmService.createProfile(name, mobileconfig);
+    
+    console.log('SimpleMDM profile created:', simpleMdmProfile);
+    
+    // Assign profile to family's device group in SimpleMDM
+    if (family.simplemdm_group_id) {
+      console.log('Assigning profile to device group:', family.simplemdm_group_id);
+      try {
+        await simpleMdmService.assignProfileToGroup(simpleMdmProfile.id, family.simplemdm_group_id);
+        console.log('Profile successfully assigned to device group');
+      } catch (assignError) {
+        console.error('Failed to assign profile to device group:', assignError);
+        // Continue anyway - profile is created, just not assigned
+      }
+    } else {
+      console.log('Family has no SimpleMDM group ID, skipping assignment');
+    }
+    
+    // Create profile in database
+    const profile = await Profile.create({
+      name,
+      familyId,
+      simpleMdmProfileId: simpleMdmProfile.id,
+      type,
+      description: profileDescription,
+      config: finalConfig
+    });
+    
+    res.status(201).json({
+      message: 'Profile created successfully',
+      profile
+    });
+  } catch (error) {
+    console.error('Create Profile Error:', error);
+    
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    
+    res.status(500).json({ error: 'Server error during profile creation' });
+  }
+});
 
 // Get a specific profile by ID
 router.get('/:id', async (req, res) => {
@@ -48,78 +153,6 @@ router.get('/:id', async (req, res) => {
   } catch (error) {
     console.error('Get Profile Error:', error);
     res.status(500).json({ error: 'Server error retrieving profile' });
-  }
-});
-
-// Create a new profile
-router.post('/', isParent, validateProfileCreation, async (req, res) => {
-  try {
-    const { name, familyId, type, description, config } = req.body;
-    
-    // Get family data and verify ownership
-    const family = await Family.findById(familyId);
-    
-    if (!family) {
-      return res.status(404).json({ error: 'Family not found' });
-    }
-    
-    if (family.parent_id !== req.user.id) {
-      return res.status(403).json({ error: 'Access denied: Not the parent of this family' });
-    }
-    
-    // Validate profile type
-    if (!['essential_kids', 'student_mode', 'balanced_teen', 'custom'].includes(type)) {
-      return res.status(400).json({ 
-        error: 'Invalid profile type. Must be one of: essential_kids, student_mode, balanced_teen, custom' 
-      });
-    }
-    
-    // Generate profile XML based on type
-    let mobileconfig;
-    
-    if (type === 'essential_kids') {
-      mobileconfig = simpleMdmService.generateEssentialKidsProfile(family.name);
-    } else if (type === 'student_mode') {
-      mobileconfig = simpleMdmService.generateStudentModeProfile(family.name);
-    } else if (type === 'balanced_teen') {
-      mobileconfig = simpleMdmService.generateBalancedTeenProfile(family.name);
-    } else if (type === 'custom') {
-      if (!config) {
-        return res.status(400).json({ error: 'Config is required for custom profiles' });
-      }
-      
-      mobileconfig = simpleMdmService.generateCustomProfile(family.name, config);
-    }
-    
-    // Create profile in SimpleMDM
-    const simpleMdmProfile = await simpleMdmService.createProfile(name, mobileconfig);
-    
-    // For now, let's skip the assignment to group and just create the profile
-    // We can assign it later when devices are enrolled
-    console.log('Created SimpleMDM profile:', simpleMdmProfile);
-    
-    // Create profile in database
-    const profile = await Profile.create({
-      name,
-      familyId,
-      simpleMdmProfileId: simpleMdmProfile.id,
-      type,
-      description,
-      config: config || Profile.getDefaultProfiles()[type].config
-    });
-    
-    res.status(201).json({
-      message: 'Profile created successfully',
-      profile
-    });
-  } catch (error) {
-    console.error('Create Profile Error:', error);
-    
-    if (error.status) {
-      return res.status(error.status).json({ error: error.message });
-    }
-    
-    res.status(500).json({ error: 'Server error during profile creation' });
   }
 });
 

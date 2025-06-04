@@ -1,5 +1,6 @@
 const axios = require('axios');
 const dotenv = require('dotenv');
+const ProfileGenerators = require('./profileGenerators');
 
 dotenv.config();
 
@@ -23,30 +24,24 @@ class SimpleMDMService {
   // Handle API errors
   handleApiError(error) {
     if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
       const errorData = {
         status: error.response.status,
         statusText: error.response.statusText,
-        data: error.response.data,
-        url: error.config?.url,
-        method: error.config?.method
+        data: error.response.data
       };
       
-      console.error('SimpleMDM API Error Details:', JSON.stringify(errorData, null, 2));
+      console.error('SimpleMDM API Error:', errorData);
       
       const err = new Error(`SimpleMDM API Error: ${error.response.status} ${error.response.statusText}`);
       err.status = error.response.status;
       err.data = error.response.data;
       throw err;
     } else if (error.request) {
-      // The request was made but no response was received
       console.error('SimpleMDM API No Response:', error.request);
       const err = new Error('SimpleMDM API No Response');
       err.status = 500;
       throw err;
     } else {
-      // Something happened in setting up the request that triggered an Error
       console.error('SimpleMDM API Request Error:', error.message);
       const err = new Error(`SimpleMDM API Request Error: ${error.message}`);
       err.status = 500;
@@ -54,31 +49,22 @@ class SimpleMDMService {
     }
   }
 
+  // ==========================================
   // DEVICE GROUPS (FAMILIES)
+  // ==========================================
 
-  // Create a device group (family)
   async createDeviceGroup(name) {
     try {
-      console.log('Creating device group:', name);
-      
-      // First, let's test basic API connectivity
-      const testResponse = await this.client.get('/account');
-      console.log('Account info:', testResponse.data);
-      
-      // Create the device group - note: this might not be directly supported in the API
-      // Let's try assignment groups instead, which can group devices
-      const response = await this.client.post('/assignment_groups', {
+      const response = await this.client.post('/device_groups', {
         name: name,
-        auto_deploy: true
+        auto_deploy_enabled: true
       });
-      console.log('Created assignment group:', response.data);
       return response.data.data;
     } catch (error) {
       this.handleApiError(error);
     }
   }
 
-  // Get a device group by ID
   async getDeviceGroup(id) {
     try {
       const response = await this.client.get(`/device_groups/${id}`);
@@ -88,7 +74,6 @@ class SimpleMDMService {
     }
   }
 
-  // Update a device group
   async updateDeviceGroup(id, name) {
     try {
       const response = await this.client.patch(`/device_groups/${id}`, {
@@ -100,7 +85,6 @@ class SimpleMDMService {
     }
   }
 
-  // Delete a device group
   async deleteDeviceGroup(id) {
     try {
       await this.client.delete(`/device_groups/${id}`);
@@ -110,28 +94,21 @@ class SimpleMDMService {
     }
   }
 
+  // ==========================================
   // ENROLLMENT
+  // ==========================================
 
-  // Generate enrollment URL for a device group
   async generateEnrollmentUrl(deviceGroupId) {
     try {
-      // Create a one-time enrollment that can be used by children
-      const response = await this.client.post('/devices', {
-        name: `Nook Device - ${Date.now()}`,
-        group_id: deviceGroupId
+      const response = await this.client.post('/enrollments', {
+        device_group_id: deviceGroupId
       });
-      
-      // The response contains an enrollment_url for device setup
-      return {
-        id: response.data.data.id,
-        url: response.data.data.attributes.enrollment_url
-      };
+      return response.data.data;
     } catch (error) {
       this.handleApiError(error);
     }
   }
 
-  // Get enrollment details
   async getEnrollment(id) {
     try {
       const response = await this.client.get(`/enrollments/${id}`);
@@ -141,7 +118,6 @@ class SimpleMDMService {
     }
   }
 
-  // Delete an enrollment
   async deleteEnrollment(id) {
     try {
       await this.client.delete(`/enrollments/${id}`);
@@ -151,9 +127,10 @@ class SimpleMDMService {
     }
   }
 
+  // ==========================================
   // DEVICES
+  // ==========================================
 
-  // Get all devices
   async getAllDevices() {
     try {
       const response = await this.client.get('/devices');
@@ -163,7 +140,6 @@ class SimpleMDMService {
     }
   }
 
-  // Get devices in a group
   async getDevicesInGroup(deviceGroupId) {
     try {
       const response = await this.client.get(`/device_groups/${deviceGroupId}/devices`);
@@ -173,7 +149,6 @@ class SimpleMDMService {
     }
   }
 
-  // Get a device by ID
   async getDevice(id) {
     try {
       const response = await this.client.get(`/devices/${id}`);
@@ -183,7 +158,6 @@ class SimpleMDMService {
     }
   }
 
-  // Update a device
   async updateDevice(id, data) {
     try {
       const response = await this.client.patch(`/devices/${id}`, data);
@@ -193,7 +167,6 @@ class SimpleMDMService {
     }
   }
 
-  // Assign a device to a group
   async assignDeviceToGroup(deviceId, deviceGroupId) {
     try {
       const response = await this.client.post(`/devices/${deviceId}/relationships/device_groups`, {
@@ -205,7 +178,6 @@ class SimpleMDMService {
     }
   }
 
-  // Remove a device from a group
   async removeDeviceFromGroup(deviceId, deviceGroupId) {
     try {
       await this.client.delete(`/devices/${deviceId}/relationships/device_groups/${deviceGroupId}`);
@@ -215,7 +187,6 @@ class SimpleMDMService {
     }
   }
 
-  // Lock a device
   async lockDevice(id, message = 'Device locked by Nook') {
     try {
       await this.client.post(`/devices/${id}/lock`, {
@@ -227,37 +198,33 @@ class SimpleMDMService {
     }
   }
 
-  // PROFILES (iOS CONFIGURATION PROFILES)
+  // ==========================================
+  // CONFIGURATION PROFILES
+  // ==========================================
 
-  // Create a profile
   async createProfile(name, mobileconfig) {
     try {
-      // Create FormData for multipart upload
       const FormData = require('form-data');
       const form = new FormData();
       
       form.append('name', name);
       form.append('mobileconfig', mobileconfig, {
-        filename: `${name}.mobileconfig`,
+        filename: `${name.toLowerCase().replace(/\s/g, '-')}.mobileconfig`,
         contentType: 'application/x-apple-aspen-config'
       });
-      form.append('user_scope', 'true');
-      form.append('attribute_support', 'false');
       
       const response = await this.client.post('/custom_configuration_profiles', form, {
         headers: {
           ...form.getHeaders(),
-          'Content-Type': 'multipart/form-data'
+          'Content-Type': `multipart/form-data; boundary=${form._boundary}`
         }
       });
-      
       return response.data.data;
     } catch (error) {
       this.handleApiError(error);
     }
   }
 
-  // Get a profile by ID
   async getProfile(id) {
     try {
       const response = await this.client.get(`/custom_configuration_profiles/${id}`);
@@ -267,14 +234,22 @@ class SimpleMDMService {
     }
   }
 
-  // Update a profile
   async updateProfile(id, name, mobileconfig) {
     try {
-      const response = await this.client.patch(`/custom_configuration_profiles/${id}`, {
-        name: name,
-        mobileconfig: mobileconfig,
-        user_scope: true,
-        attribute_support: false
+      const FormData = require('form-data');
+      const form = new FormData();
+      
+      form.append('name', name);
+      form.append('mobileconfig', mobileconfig, {
+        filename: `${name.toLowerCase().replace(/\s/g, '-')}.mobileconfig`,
+        contentType: 'application/x-apple-aspen-config'
+      });
+      
+      const response = await this.client.patch(`/custom_configuration_profiles/${id}`, form, {
+        headers: {
+          ...form.getHeaders(),
+          'Content-Type': `multipart/form-data; boundary=${form._boundary}`
+        }
       });
       return response.data.data;
     } catch (error) {
@@ -282,7 +257,6 @@ class SimpleMDMService {
     }
   }
 
-  // Delete a profile
   async deleteProfile(id) {
     try {
       await this.client.delete(`/custom_configuration_profiles/${id}`);
@@ -292,49 +266,75 @@ class SimpleMDMService {
     }
   }
 
-  // Assign a profile to a device group
   async assignProfileToGroup(profileId, deviceGroupId) {
     try {
-      const response = await this.client.post(`/custom_configuration_profiles/${profileId}/device_groups/${deviceGroupId}`);
-      return response.data;
+      // Create an assignment group that links the profile to the device group
+      const response = await this.client.post('/assignment_groups', {
+        custom_configuration_profile_id: profileId,
+        device_group_id: deviceGroupId,
+        auto_deploy: true
+      });
+      return response.data.data;
     } catch (error) {
       this.handleApiError(error);
     }
   }
 
-  // Remove a profile from a device group
   async removeProfileFromGroup(profileId, deviceGroupId) {
     try {
-      await this.client.delete(`/custom_configuration_profiles/${profileId}/device_groups/${deviceGroupId}`);
+      // Find the assignment group first, then delete it
+      // This is a simplified version - in practice you'd need to find the assignment group ID
+      const assignmentGroups = await this.client.get('/assignment_groups');
+      const assignment = assignmentGroups.data.data.find(ag => 
+        ag.relationships.custom_configuration_profile?.data?.id == profileId &&
+        ag.relationships.device_group?.data?.id == deviceGroupId
+      );
+      
+      if (assignment) {
+        await this.client.delete(`/assignment_groups/${assignment.id}`);
+      }
       return true;
     } catch (error) {
       this.handleApiError(error);
     }
   }
 
-  // Assign a profile to a device
   async assignProfileToDevice(profileId, deviceId) {
     try {
-      const response = await this.client.post(`/custom_configuration_profiles/${profileId}/devices/${deviceId}`);
-      return response.data;
+      // Create an assignment group that links the profile to a specific device
+      const response = await this.client.post('/assignment_groups', {
+        custom_configuration_profile_id: profileId,
+        device_id: deviceId,
+        auto_deploy: true
+      });
+      return response.data.data;
     } catch (error) {
       this.handleApiError(error);
     }
   }
 
-  // Remove a profile from a device
   async removeProfileFromDevice(profileId, deviceId) {
     try {
-      await this.client.delete(`/custom_configuration_profiles/${profileId}/devices/${deviceId}`);
+      // Find the assignment group first, then delete it
+      const assignmentGroups = await this.client.get('/assignment_groups');
+      const assignment = assignmentGroups.data.data.find(ag => 
+        ag.relationships.custom_configuration_profile?.data?.id == profileId &&
+        ag.relationships.device?.data?.id == deviceId
+      );
+      
+      if (assignment) {
+        await this.client.delete(`/assignment_groups/${assignment.id}`);
+      }
       return true;
     } catch (error) {
       this.handleApiError(error);
     }
   }
 
-  // APPS (MANAGED APPLICATIONS)
+  // ==========================================
+  // MANAGED APPLICATIONS
+  // ==========================================
 
-  // Get all apps
   async getAllApps() {
     try {
       const response = await this.client.get('/apps');
@@ -344,7 +344,6 @@ class SimpleMDMService {
     }
   }
 
-  // Get an app by ID
   async getApp(id) {
     try {
       const response = await this.client.get(`/apps/${id}`);
@@ -354,7 +353,6 @@ class SimpleMDMService {
     }
   }
 
-  // Assign an app to a device group
   async assignAppToGroup(appId, deviceGroupId) {
     try {
       const response = await this.client.post(`/apps/${appId}/relationships/device_groups`, {
@@ -366,7 +364,6 @@ class SimpleMDMService {
     }
   }
 
-  // Remove an app from a device group
   async removeAppFromGroup(appId, deviceGroupId) {
     try {
       await this.client.delete(`/apps/${appId}/relationships/device_groups/${deviceGroupId}`);
@@ -376,125 +373,28 @@ class SimpleMDMService {
     }
   }
 
-  // PROFILE GENERATORS
+  // ==========================================
+  // PROFILE GENERATION CONVENIENCE METHODS
+  // ==========================================
 
-  // Generate restriction profile XML for Essential Kids
-  generateEssentialKidsProfile(familyName) {
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>PayloadContent</key>
-  <array>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures restrictions</string>
-      <key>PayloadDisplayName</key>
-      <string>Restrictions</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.restrictions</string>
-      <key>PayloadType</key>
-      <string>com.apple.applicationaccess</string>
-      <key>PayloadUUID</key>
-      <string>${this._generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>allowAppInstallation</key>
-      <false/>
-      <key>allowCamera</key>
-      <true/>
-      <key>allowExplicitContent</key>
-      <false/>
-      <key>allowInAppPurchases</key>
-      <false/>
-      <key>allowSafari</key>
-      <false/>
-      <key>allowAccountModification</key>
-      <false/>
-      <key>allowFindMyFriendsModification</key>
-      <false/>
-      <key>allowEnterpriseAppTrust</key>
-      <false/>
-      <key>forceEncryptedBackup</key>
-      <true/>
-      <key>allowPasswordAutoFill</key>
-      <false/>
-      <key>allowPasswordSharing</key>
-      <false/>
-      <key>allowPasswordProximityRequests</key>
-      <false/>
-      <key>allowAirDrop</key>
-      <false/>
-      <key>allowAppRemoval</key>
-      <false/>
-      <key>allowAssistant</key>
-      <false/>
-      <key>allowBookstore</key>
-      <false/>
-      <key>allowCloudDocumentSync</key>
-      <false/>
-      <key>allowMusicService</key>
-      <false/>
-      <key>allowScreenshot</key>
-      <false/>
-      <key>allowSharedStream</key>
-      <false/>
-      <key>allowiTunes</key>
-      <false/>
-      <key>forceAssistantProfanityFilter</key>
-      <true/>
-      <key>forceLimitAdTracking</key>
-      <true/>
-    </dict>
-    <dict>
-      <key>PayloadDescription</key>
-      <string>Configures allowed apps</string>
-      <key>PayloadDisplayName</key>
-      <string>Allowed Apps</string>
-      <key>PayloadIdentifier</key>
-      <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.allowedapps</string>
-      <key>PayloadType</key>
-      <string>com.apple.functionality.whitelisted-applications</string>
-      <key>PayloadUUID</key>
-      <string>${this._generateUUID()}</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-      <key>WhitelistedApplications</key>
-      <array>
-        <string>com.apple.mobilephone</string>
-        <string>com.apple.MobileSMS</string>
-        <string>com.apple.mobileslideshow</string>
-        <string>com.apple.mobilemail</string>
-      </array>
-    </dict>
-  </array>
-  <key>PayloadDescription</key>
-  <string>Essential Kids profile with limited apps for young children</string>
-  <key>PayloadDisplayName</key>
-  <string>${familyName} - Essential Kids</string>
-  <key>PayloadIdentifier</key>
-  <string>com.nook.${familyName.toLowerCase().replace(/\s/g, '-')}.essentialkids</string>
-  <key>PayloadOrganization</key>
-  <string>Nook MDM</string>
-  <key>PayloadRemovalDisallowed</key>
-  <true/>
-  <key>PayloadType</key>
-  <string>Configuration</string>
-  <key>PayloadUUID</key>
-  <string>${this._generateUUID()}</string>
-  <key>PayloadVersion</key>
-  <integer>1</integer>
-</dict>
-</plist>`;
+  generateFirstPhoneProfile(familyName) {
+    return ProfileGenerators.generateFirstPhoneProfile(familyName);
   }
 
-  // Generate a UUID
-  _generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
+  generateExplorerProfile(familyName) {
+    return ProfileGenerators.generateExplorerProfile(familyName);
+  }
+
+  generateGuardianProfile(familyName) {
+    return ProfileGenerators.generateGuardianProfile(familyName);
+  }
+
+  generateTimeOutProfile(familyName) {
+    return ProfileGenerators.generateTimeOutProfile(familyName);
+  }
+
+  generateCustomProfile(familyName, config) {
+    return ProfileGenerators.generateCustomProfile(familyName, config);
   }
 }
 

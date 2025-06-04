@@ -1,4 +1,5 @@
 const db = require('../utils/db');
+const ProfileGenerators = require('../services/profileGenerators');
 
 class Profile {
   // Create a new profile
@@ -17,7 +18,7 @@ class Profile {
         `INSERT INTO profiles (name, family_id, simplemdm_profile_id, type, description, config)
          VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id, name, family_id, simplemdm_profile_id, type, description, config, created_at`,
-        [name, familyId, simpleMdmProfileId, type, description, JSON.stringify(config)]
+        [name, familyId, simpleMdmProfileId, type, description, config]
       );
       
       return result.rows[0];
@@ -35,10 +36,6 @@ class Profile {
       [id]
     );
     
-    if (result.rows[0]) {
-      result.rows[0].config = JSON.parse(result.rows[0].config);
-    }
-    
     return result.rows[0];
   }
 
@@ -50,10 +47,6 @@ class Profile {
        WHERE simplemdm_profile_id = $1`,
       [simpleMdmProfileId]
     );
-    
-    if (result.rows[0]) {
-      result.rows[0].config = JSON.parse(result.rows[0].config);
-    }
     
     return result.rows[0];
   }
@@ -68,10 +61,7 @@ class Profile {
       [familyId]
     );
     
-    return result.rows.map(row => {
-      row.config = JSON.parse(row.config);
-      return row;
-    });
+    return result.rows;
   }
 
   // Update profile
@@ -92,17 +82,13 @@ class Profile {
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $5
        RETURNING id, name, family_id, simplemdm_profile_id, type, description, config, created_at, updated_at`,
-      [name, simpleMdmProfileId, description, JSON.stringify(config), id]
+      [name, simpleMdmProfileId, description, config, id]
     );
     
     if (result.rows.length === 0) {
       const error = new Error('Profile not found');
       error.status = 404;
       throw error;
-    }
-    
-    if (result.rows[0]) {
-      result.rows[0].config = JSON.parse(result.rows[0].config);
     }
     
     return result.rows[0];
@@ -153,20 +139,18 @@ class Profile {
     return true;
   }
   
-  // Get default profile configurations
+  // Get default profile configurations with metadata from ProfileGenerators
   static getDefaultProfiles() {
+    const metadata = ProfileGenerators.getProfileMetadata();
+    
     return {
       essential_kids: {
-        name: 'Essential Kids',
+        name: metadata.essential_kids.name,
         type: 'essential_kids',
-        description: 'Basic profile for young children with only essential apps',
+        description: metadata.essential_kids.description,
+        ageRange: metadata.essential_kids.ageRange,
         config: {
-          allowed_apps: [
-            'com.apple.mobilephone', // Phone
-            'com.apple.MobileSMS', // Messages
-            'com.apple.mobileslideshow', // Photos
-            'com.apple.mobilemail', // Mail
-          ],
+          allowed_apps: metadata.essential_kids.allowedApps,
           restrictions: {
             allow_app_installation: false,
             allow_camera: true,
@@ -194,20 +178,12 @@ class Profile {
         }
       },
       student_mode: {
-        name: 'Student Mode',
+        name: metadata.student_mode.name,
         type: 'student_mode',
-        description: 'Profile for school-age children with educational apps',
+        description: metadata.student_mode.description,
+        ageRange: metadata.student_mode.ageRange,
         config: {
-          allowed_apps: [
-            'com.apple.mobilephone', // Phone
-            'com.apple.MobileSMS', // Messages
-            'com.apple.mobileslideshow', // Photos
-            'com.apple.mobilemail', // Mail
-            'com.apple.mobilesafari', // Safari (with content filtering)
-            'com.apple.mobilecal', // Calendar
-            'com.apple.camera', // Camera
-            'com.apple.mobilenotes', // Notes
-          ],
+          allowed_apps: metadata.student_mode.allowedApps,
           restrictions: {
             allow_app_installation: false,
             allow_camera: true,
@@ -246,24 +222,12 @@ class Profile {
         }
       },
       balanced_teen: {
-        name: 'Balanced Teen',
+        name: metadata.balanced_teen.name,
         type: 'balanced_teen',
-        description: 'Profile for teenagers with more freedom but still some limits',
+        description: metadata.balanced_teen.description,
+        ageRange: metadata.balanced_teen.ageRange,
         config: {
-          allowed_apps: [
-            'com.apple.mobilephone', // Phone
-            'com.apple.MobileSMS', // Messages
-            'com.apple.mobileslideshow', // Photos
-            'com.apple.mobilemail', // Mail
-            'com.apple.mobilesafari', // Safari
-            'com.apple.mobilecal', // Calendar
-            'com.apple.camera', // Camera
-            'com.apple.mobilenotes', // Notes
-            'com.apple.Music', // Music
-            'com.burbn.instagram', // Instagram (with time limits)
-            'com.atebits.Tweetie2', // Twitter (with time limits)
-            'com.google.ios.youtube', // YouTube (with time limits)
-          ],
+          allowed_apps: metadata.balanced_teen.allowedApps,
           restrictions: {
             allow_app_installation: true,
             allow_camera: true,
@@ -303,6 +267,12 @@ class Profile {
         }
       }
     };
+  }
+
+  // Get profile metadata (name, description, age range) for a given type
+  static getProfileMetadata(type) {
+    const metadata = ProfileGenerators.getProfileMetadata();
+    return metadata[type] || null;
   }
 }
 
